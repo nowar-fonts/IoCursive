@@ -39,6 +39,7 @@ define weightToMenuStyleMap : object
 	100 "Thin"
 	200 "Extralight"
 	300 "Light"
+	350 "Semilight"
 	400 ""
 	450 "Book"
 	500 "Medium"
@@ -60,11 +61,13 @@ define slopeToMenuStyleMap : object
 	normal  ""
 	italic  "Italic"
 	oblique "Oblique"
+	cursive ""
 
 define weightToMenuStyleMapShort : object
 	100 "Th"
 	200 "XLt"
 	300 "Lt"
+	350 "SmLt"
 	400 ""
 	450 "Bk"
 	500 "Md"
@@ -86,6 +89,7 @@ define slopeToMenuStyleMapShort : object
 	normal  ""
 	italic  "It"
 	oblique "Obl"
+	cursive ""
 
 define [getStyle weight width slope] : begin
 	define weightPart : fallback weightToMenuStyleMap.(weight) ('W' + weight)

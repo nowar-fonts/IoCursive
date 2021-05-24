@@ -67,13 +67,12 @@ css   = 700
 
 ###################################################################################################
 # Override default building slope sets
-# Format: <upright|italic|oblique> = <"normal"|"italic"|"oblique">
-# When this section is absent, all slopes would be built.
+# Format: <cursive|italic|upright|oblique> = <"normal"|"italic"|"oblique">
+# When this section is absent, `cursive` and `italic` would be built.
 
 [buildPlans.iosevka-custom.slopes]
-upright = "normal"
+cursive = "normal"
 italic = "italic"
-oblique = "oblique"
 
 # End slope section
 ###################################################################################################

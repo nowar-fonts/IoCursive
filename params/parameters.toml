@@ -130,3 +130,7 @@ slopeAngle = 9.4
 [slope-oblique]
 isOblique = true
 slopeAngle = 9.4
+
+[slope-cursive]
+isItalic = true
+slopeAngle = 0
