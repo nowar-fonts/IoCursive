@@ -1,0 +1,63 @@
+$$include '../../../meta/macros.ptl'
+
+import [mix barmixL linreg clamp fallback] from '../../../support/utils'
+import [DesignParameters] from '../../../meta/aesthetics'
+import '../../../support/point' as Point
+
+glyph-module
+
+glyph-block Letter-Cyrillic-Nje : begin
+	glyph-block-import CommonShapes
+	glyph-block-import Common-Derivatives
+	glyph-block-import Letter-Cyrillic-Yeri : CyrlYeriUprightShape CyrlYeriRoundShape CyrlYeriCursiveShape
+
+	define [CyrNjeShape Yeri df top] : glyph-proc
+		local rightSB : df.width - df.leftSB
+		local xlefttop : mix df.leftSB df.rightSB 0.075
+		local l : df.leftSB + 0
+		local r : rightSB - 0
+		local middle : df.width / 2
+		local jut : Math.min Jut : Jut * 0.72 * df.div
+		set-width df.width
+		include : VBarLeft l 0 top df.mvs
+		include : Yeri top
+			left -- (middle - df.mvs / 2 * HVContrast)
+			right -- (r - O)
+			stroke -- df.mvs
+			jut -- jut
+		include : HBar (df.leftSB + df.mvs * 0.1) middle (top / 2)
+
+		define useItalicShape : Yeri === CyrlYeriCursiveShape
+		if SLAB : begin
+			include : tagged 'serifLT' : if useItalicShape
+				then : LeftwardTopSerif l top SideJut
+				else : union
+					LeftwardTopSerif l top SideJut
+					CenterTopSerif (l + df.mvs / 2 * HVContrast) top jut
+			include : tagged 'serifLB' : if useItalicShape
+				then : glyph-proc
+				else : union
+					LeftwardBottomSerif l 0 SideJut
+					CenterBottomSerif (l + df.mvs / 2 * HVContrast) 0 jut
+			if useItalicShape : eject-contour 'serifYeriLT'
+
+	define YerConfig : object
+		corner  { CyrlYeriUprightShape }
+		round   { CyrlYeriRoundShape   }
+		cursive { CyrlYeriCursiveShape }
+
+	foreach { suffix { Yeri } } [Object.entries YerConfig] : do
+		create-glyph "cyrl/Nje.\(suffix)"  : glyph-proc
+			local df : DivFrame para.diversityM 3
+			set-width df.width
+			include : df.markSet.capital
+			include : CyrNjeShape Yeri df CAP
+
+		create-glyph "cyrl/nje.\(suffix)" : glyph-proc
+			local df : DivFrame para.diversityM 3
+			set-width df.width
+			include : df.markSet.e
+			include : CyrNjeShape Yeri df XH
+
+	select-variant 'cyrl/Nje' 0x40A
+	select-variant 'cyrl/nje' 0x45A
