@@ -493,7 +493,7 @@ async function buildGlyphSharingTtc(target, parts, out) {
 
 // Collection Archives
 const TtcArchiveFile = file.make(
-	(cgr, version) => `${ARCHIVE_DIR}/ttc-${cgr}-${version}.zip`,
+	(cgr, version) => `${ARCHIVE_DIR}/ttc-${cgr}-${version}.7z`,
 	async (target, out, cgr) => {
 		const [collectPlans] = await target.need(CollectPlans, de`${out.dir}`);
 		const ttcFiles = Array.from(new Set(collectPlans.ttcContents[cgr]));
@@ -503,14 +503,14 @@ const TtcArchiveFile = file.make(
 		await rm(out.full);
 		await cd(`${BUILD}/ttc-collect/${cgr}/ttc`).run(
 			["7z", "a"],
-			["-tzip", "-r", "-mx=9"],
+			["-t7z", "-r", "-mx=9"],
 			`../../../../${out.full}`,
 			`./`
 		);
 	}
 );
 const SuperTtcArchiveFile = file.make(
-	(cgr, version) => `${ARCHIVE_DIR}/super-ttc-${cgr}-${version}.zip`,
+	(cgr, version) => `${ARCHIVE_DIR}/super-ttc-${cgr}-${version}.7z`,
 	async (target, out, cgr) => {
 		await target.need(de`${out.dir}`, CollectedSuperTtcFile(cgr));
 
@@ -518,7 +518,7 @@ const SuperTtcArchiveFile = file.make(
 		await rm(out.full);
 		await cd(DIST_SUPER_TTC).run(
 			["7z", "a"],
-			["-tzip", "-r", "-mx=9"],
+			["-t7z", "-r", "-mx=9"],
 			Path.relative(DIST_SUPER_TTC, out.full),
 			`${cgr}.ttc`
 		);
@@ -527,7 +527,7 @@ const SuperTtcArchiveFile = file.make(
 
 // Single-group Archives
 const GroupTtfArchiveFile = file.make(
-	(gr, version) => `${ARCHIVE_DIR}/ttf-${gr}-${version}.zip`,
+	(gr, version) => `${ARCHIVE_DIR}/ttf-${gr}-${version}.7z`,
 	async (target, out, gr) => {
 		await target.need(de`${out.dir}`);
 		await target.need(GroupContents(gr));
@@ -535,7 +535,7 @@ const GroupTtfArchiveFile = file.make(
 	}
 );
 const GroupTtfUnhintedArchiveFile = file.make(
-	(gr, version) => `${ARCHIVE_DIR}/ttf-unhinted-${gr}-${version}.zip`,
+	(gr, version) => `${ARCHIVE_DIR}/ttf-unhinted-${gr}-${version}.7z`,
 	async (target, out, gr) => {
 		await target.need(de`${out.dir}`);
 		await target.need(GroupContents(gr));
@@ -543,7 +543,7 @@ const GroupTtfUnhintedArchiveFile = file.make(
 	}
 );
 const GroupWebArchiveFile = file.make(
-	(gr, version) => `${ARCHIVE_DIR}/webfont-${gr}-${version}.zip`,
+	(gr, version) => `${ARCHIVE_DIR}/webfont-${gr}-${version}.7z`,
 	async (target, out, gr) => {
 		await target.need(de`${out.dir}`);
 		await target.need(GroupContents(gr));
@@ -553,7 +553,7 @@ const GroupWebArchiveFile = file.make(
 async function CreateGroupArchiveFile(dir, out, ...files) {
 	const relOut = Path.relative(dir, out.full);
 	await rm(out.full);
-	await cd(dir).run(["7z", "a"], ["-tzip", "-r", "-mx=9"], relOut, ...files);
+	await cd(dir).run(["7z", "a"], ["-t7z", "-r", "-mx=9"], relOut, ...files);
 }
 
 ///////////////////////////////////////////////////////////
