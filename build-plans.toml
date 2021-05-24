@@ -160,23 +160,12 @@ italic = "italic"
 # IMPORTANT : Currently "shape" property only support 3 ... 9
 #              and "menu" only support 1 ... 9
 
-[widths.semicondensed]
-shape = 450
-menu  = 4
-css   = "semi-condensed"
-
 [widths.normal]
 shape = 500
 menu  = 5
 css   = "normal"
 
-[widths.semiextended]
-shape = 550
-menu  = 6
-css   = "semi-expanded"
-
 [widths.extended]
 shape = 600
 menu  = 7
 css   = "expanded"
-
