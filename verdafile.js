@@ -36,6 +36,7 @@ const webfontFormatsPages = [["woff2", "woff2"]];
 const WIDTH_NORMAL = "normal";
 const WEIGHT_NORMAL = "regular";
 const SLOPE_NORMAL = "upright";
+const SLOPE_OBLIQUE = "oblique";
 const DEFAULT_SUBFAMILY = "regular";
 
 const BUILD_PLANS = "build-plans.toml";
@@ -50,14 +51,9 @@ build.setSelfTracking();
 //////                   Oracles                     //////
 ///////////////////////////////////////////////////////////
 
-const PackageJsonData = computed(`env::package-json-data`, async target => {
-	const [pj] = await target.need(sfu`package.json`);
-	const package_json = JSON.parse(await fs.promises.readFile(pj.full, "utf-8"));
-	return package_json;
-});
-
 const Version = computed(`env::version`, async target => {
-	const [pj] = await target.need(PackageJsonData);
+	const [pjf] = await target.need(sfu`package.json`);
+	const pj = JSON.parse(await fs.promises.readFile(pjf.full, "utf-8"));
 	return pj.version;
 });
 
@@ -67,6 +63,17 @@ const CheckTtfAutoHintExists = oracle(`oracle:check-ttfautohint-exists`, async t
 	} catch (e) {
 		fail("External dependency <ttfautohint>, needed for building hinted font, does not exist.");
 	}
+});
+
+const Dependencies = computed("env::dependencies", async target => {
+	const [pjf] = await target.need(sfu`package.json`);
+	const pj = JSON.parse(await fs.promises.readFile(pjf.full, "utf-8"));
+	let subGoals = [];
+	for (const pkgName in pj.dependencies) {
+		subGoals.push(InstalledVersion(pkgName, pj.dependencies[pkgName]));
+	}
+	const [actual] = await target.need(subGoals);
+	return actual;
 });
 
 const InstalledVersion = computed.make(
@@ -84,22 +91,12 @@ const InstalledVersion = computed.make(
 	}
 );
 
-const Dependencies = computed("env::dependencies", async target => {
-	const [pj] = await target.need(PackageJsonData);
-	let subGoals = [];
-	for (const pkgName in pj.dependencies) {
-		subGoals.push(InstalledVersion(pkgName, pj.dependencies[pkgName]));
-	}
-	const [actual] = await target.need(subGoals);
-	return actual;
-});
-
 ///////////////////////////////////////////////////////////
 //////                    Plans                      //////
 ///////////////////////////////////////////////////////////
 
 const RawPlans = computed(`metadata:raw-plans`, async target => {
-	await target.need(sfu(BUILD_PLANS), ofu(PRIVATE_BUILD_PLANS));
+	await target.need(sfu(BUILD_PLANS), ofu(PRIVATE_BUILD_PLANS), Version);
 
 	const bp = await tryParseToml(BUILD_PLANS);
 	bp.buildOptions = bp.buildOptions || {};
@@ -182,7 +179,8 @@ const FontInfoOf = computed.group("metadata:font-info-of", async (target, fileNa
 		derivingVariants: bp.derivingVariants,
 		featureControl: {
 			noCvSs: bp["no-cv-ss"] || false,
-			noLigation: bp["no-ligation"] || false
+			noLigation: bp["no-ligation"] || false,
+			exportGlyphNames: bp["export-glyph-names"] || false
 		},
 		// Ligations
 		ligations: bp.ligations || null,
@@ -367,35 +365,41 @@ const DistWoff2 = file.make(
 ///////////////////////////////////////////////////////////
 
 const CollectPlans = computed(`metadata:collect-plans`, async target => {
-	const [rawPlans, suffixMapping] = await target.need(RawPlans, StandardSuffixes);
+	const [rawPlans] = await target.need(RawPlans);
 	return await getCollectPlans(
 		target,
 		rawPlans.collectPlans,
-		suffixMapping,
 		rawPlans.collectConfig,
 		fnStandardTtc
 	);
 });
 
-const StandardSuffixes = computed(`metadata:standard-suffixes`, async target => {
-	const [rp] = await target.need(RawPlans);
-	return getSuffixMapping(rp.weights, rp.slopes, rp.widths);
-});
-
-async function getCollectPlans(target, rawCollectPlans, suffixMapping, config, fnFileName) {
+async function getCollectPlans(target, rawCollectPlans, config, fnFileName) {
 	const glyfTtcComposition = {},
 		ttcComposition = {},
-		ttcContents = {},
-		groupDecomposition = {},
-		groupInRelease = {};
+		plans = {};
+
+	let allCollectableGroups = new Set();
 	for (const collectPrefix in rawCollectPlans) {
-		const groupFileList = new Set();
 		const collect = rawCollectPlans[collectPrefix];
+		if (!collect.release) continue;
+		for (const gr of collect.from) allCollectableGroups.add(gr);
+	}
+
+	const amendedRawCollectPlans = { ...rawCollectPlans };
+	for (const gr of allCollectableGroups) {
+		amendedRawCollectPlans[`sgr-` + gr] = { release: true, isAmended: true, from: [gr] };
+	}
+
+	for (const collectPrefix in amendedRawCollectPlans) {
+		const groupFileList = new Set();
+		const collect = amendedRawCollectPlans[collectPrefix];
 		if (!collect || !collect.from || !collect.from.length) continue;
 
 		for (const prefix of collect.from) {
 			const [gri] = await target.need(BuildPlanOf(prefix));
 			const ttfFileNameSet = new Set(gri.targets);
+			const suffixMapping = getSuffixMapping(gri.weights, gri.slopes, gri.widths);
 			for (const suffix in suffixMapping) {
 				const sfi = suffixMapping[suffix];
 				const ttcFileName = fnFileName(
@@ -406,7 +410,7 @@ async function getCollectPlans(target, rawCollectPlans, suffixMapping, config, f
 					sfi.slope
 				);
 				const glyfTtcFileName = fnFileName(
-					{ ...config, distinguishWidths: true },
+					{ ...config, distinguishWidths: true, distinguishWhetherUpright: true },
 					collectPrefix,
 					sfi.weight,
 					sfi.width,
@@ -424,17 +428,26 @@ async function getCollectPlans(target, rawCollectPlans, suffixMapping, config, f
 				groupFileList.add(ttcFileName);
 			}
 		}
-		ttcContents[collectPrefix] = [...groupFileList];
-		groupDecomposition[collectPrefix] = [...collect.from];
-		groupInRelease[collectPrefix] = !!collect.release;
+		plans[collectPrefix] = {
+			ttcContents: [...groupFileList],
+			groupDecomposition: [...collect.from],
+			inRelease: !!collect.release,
+			isAmended: !!collect.isAmended
+		};
 	}
-	return { glyfTtcComposition, ttcComposition, ttcContents, groupDecomposition, groupInRelease };
+	return { glyfTtcComposition, ttcComposition, plans };
 }
 function fnStandardTtc(collectConfig, prefix, w, wd, s) {
 	const ttcSuffix = makeSuffix(
 		collectConfig.distinguishWeights ? w : WEIGHT_NORMAL,
 		collectConfig.distinguishWidths ? wd : WIDTH_NORMAL,
-		collectConfig.distinguishSlope ? s : SLOPE_NORMAL,
+		collectConfig.distinguishSlope
+			? s
+			: collectConfig.distinguishWhetherUpright
+			? s === SLOPE_NORMAL
+				? SLOPE_NORMAL
+				: SLOPE_OBLIQUE
+			: SLOPE_NORMAL,
 		DEFAULT_SUBFAMILY
 	);
 	return `${prefix}-${ttcSuffix}`;
@@ -451,7 +464,7 @@ const CollectedSuperTtcFile = file.make(
 	cgr => `${DIST_SUPER_TTC}/${cgr}.ttc`,
 	async (target, out, cgr) => {
 		const [cp] = await target.need(CollectPlans, de(out.dir));
-		const parts = Array.from(new Set(cp.ttcContents[cgr]));
+		const parts = Array.from(new Set(cp.plans[cgr].ttcContents));
 		const [inputs] = await target.need(parts.map(pt => CollectedTtcFile(cgr, pt)));
 		await buildCompositeTtc(out, inputs);
 	}
@@ -496,7 +509,7 @@ const TtcArchiveFile = file.make(
 	(cgr, version) => `${ARCHIVE_DIR}/ttc-${cgr}-${version}.zip`,
 	async (target, out, cgr) => {
 		const [collectPlans] = await target.need(CollectPlans, de`${out.dir}`);
-		const ttcFiles = Array.from(new Set(collectPlans.ttcContents[cgr]));
+		const ttcFiles = Array.from(new Set(collectPlans.plans[cgr].ttcContents));
 		await target.need(ttcFiles.map(pt => CollectedTtcFile(cgr, pt)));
 
 		// Packaging
@@ -583,9 +596,11 @@ const PagesDir = oracle(`pages-dir-path`, async t => {
 
 const PagesDataExport = task(`pages:data-export`, async t => {
 	const [pagesDir] = await t.need(PagesDir, Version, Parameters, UtilScripts);
-	const [cm] = await t.need(BuildCM("iosevka", "iosevka-regular"));
-	const [cmi] = await t.need(BuildCM("iosevka", "iosevka-italic"));
-	const [cmo] = await t.need(BuildCM("iosevka", "iosevka-oblique"));
+	const [cm, cmi, cmo] = await t.need(
+		BuildCM("iosevka", "iosevka-regular"),
+		BuildCM("iosevka", "iosevka-italic"),
+		BuildCM("iosevka", "iosevka-oblique")
+	);
 	await run(
 		`node`,
 		`utility/export-data/index`,
@@ -732,11 +747,11 @@ const ReleaseNotePackagesFile = file(`${BUILD}/release-packages.json`, async (t,
 	const [collectPlans] = await t.need(CollectPlans);
 	const [{ buildPlans }] = await t.need(BuildPlans);
 	let releaseNoteGroups = {};
-	for (const [k, g] of Object.entries(collectPlans.groupDecomposition)) {
-		if (!collectPlans.groupInRelease[k]) continue;
-		const primePlan = buildPlans[g[0]];
+	for (const [k, plan] of Object.entries(collectPlans.plans)) {
+		if (!plan.inRelease || plan.isAmended) continue;
+		const primePlan = buildPlans[plan.groupDecomposition[0]];
 		let subGroups = {};
-		for (const gr of g) {
+		for (const gr of plan.groupDecomposition) {
 			const bp = buildPlans[gr];
 			subGroups[gr] = {
 				family: bp.family,
@@ -778,21 +793,27 @@ phony(`clean`, async () => {
 	build.deleteJournal();
 });
 phony(`release`, async target => {
-	const [version, collectPlans] = await target.need(Version, CollectPlans);
+	const [collectPlans] = await target.need(CollectPlans);
 	let goals = [];
-	for (const [cgr, subGroups] of Object.entries(collectPlans.groupDecomposition)) {
-		if (!collectPlans.groupInRelease[cgr]) continue;
-		goals.push(TtcArchiveFile(cgr, version), SuperTtcArchiveFile(cgr, version));
-		for (const gr of subGroups) {
-			goals.push(
-				GroupTtfArchiveFile(gr, version),
-				GroupTtfUnhintedArchiveFile(gr, version),
-				GroupWebArchiveFile(gr, version)
-			);
-		}
+	for (const [cgr, plan] of Object.entries(collectPlans.plans)) {
+		if (!plan.inRelease) continue;
+		goals.push(ReleaseGroup(cgr));
 	}
 	await target.need(goals);
 	await target.need(SampleImages, Pages, ReleaseNotes, ChangeLog);
+});
+const ReleaseGroup = phony.group("release-group", async (target, cgr) => {
+	const [version, collectPlans] = await target.need(Version, CollectPlans);
+	const subGroups = collectPlans.plans[cgr].groupDecomposition;
+
+	let goals = [TtcArchiveFile(cgr, version), SuperTtcArchiveFile(cgr, version)];
+	for (const gr of subGroups) {
+		goals.push(GroupTtfArchiveFile(gr, version));
+		goals.push(GroupTtfUnhintedArchiveFile(gr, version));
+		goals.push(GroupWebArchiveFile(gr, version));
+	}
+
+	await target.need(goals);
 });
 
 ///////////////////////////////////////////////////////////
@@ -924,8 +945,8 @@ function nValidate(key, v, validator) {
 	return v;
 }
 
-const VlShapeWeight = { validate: x => x >= 100 && x <= 900 };
-const VlCssWeight = { validate: x => x > 0 && x < 1000 };
+const VlShapeWeight = { validate: x => x >= 100 && x <= 1000 };
+const VlCssWeight = { validate: x => x > 0 && x <= 1000 };
 const VlMenuWeight = VlCssWeight;
 
 const g_widthFixupMemory = new Map();

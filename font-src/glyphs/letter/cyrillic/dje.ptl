@@ -1,8 +1,6 @@
 $$include '../../../meta/macros.ptl'
 
 import [mix barmixL linreg clamp fallback] from '../../../support/utils'
-import [DesignParameters] from '../../../meta/aesthetics'
-import '../../../support/point' as Point
 
 glyph-module
 
@@ -45,6 +43,6 @@ glyph-block Letter-Cyrillic-Dje : begin
 			include : DownwardLeftSerif  xTopBarLeft  CAP VJut swVJut
 			include : DownwardRightSerif xTopBarRight CAP VJut swVJut
 
-	with-related-glyphs 'cyrl/dje' 0x452 'heng' : lambda [src sel] : glyph-proc
+	derive-glyphs 'cyrl/dje' 0x452 'heng' : lambda [src sel] : glyph-proc
 		include [refer-glyph src] AS_BASE
 		include : HBarOverlay

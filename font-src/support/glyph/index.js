@@ -1,19 +1,30 @@
 ﻿"use strict";
 
-const Transform = require("./transform");
-const Point = require("./point");
-const Anchor = require("./anchor");
-const Geom = require("./geometry");
+const Transform = require("../geometry/transform");
+const Point = require("../geometry/point");
+const Anchor = require("../geometry/anchor");
+const Geom = require("../geometry");
 
 module.exports = class Glyph {
 	constructor(_identifier) {
 		this._m_identifier = _identifier;
+
+		// Ranks
+		this.glyphRank = 0;
+		this.grRank = 0;
+		this.codeRank = 0xffffffff;
+		this.subRank = 0xffffffff;
+
+		// Geometry
 		this.geometry = new Geom.CombineGeometry();
+		this.gizmo = Transform.Id();
+
+		// Metrics
 		this.advanceWidth = 500;
-		this.autoRefPriority = 0;
 		this.markAnchors = {};
 		this.baseAnchors = {};
-		this.gizmo = Transform.Id();
+
+		// Tracking
 		this.dependencies = [];
 		this.ctxTag = null;
 	}
@@ -69,11 +80,7 @@ module.exports = class Glyph {
 
 		// Combine anchors and get offset
 		let shift = { x: 0, y: 0 };
-		if (g.markAnchors) {
-			for (const m in this.baseAnchors) {
-				this.combineAnchor(shift, this.baseAnchors[m], g.markAnchors[m], g.baseAnchors);
-			}
-		}
+		this.combineMarks(g, shift);
 
 		this.includeGlyphImpl(g, shift.x, shift.y);
 		if (copyAnchors || g.isMarkSet) this.copyAnchors(g);
@@ -90,7 +97,6 @@ module.exports = class Glyph {
 		this.related = g.related;
 	}
 	cloneRankFromGlyph(g) {
-		this.autoRefPriority = g.autoRefPriority;
 		this.glyphRank = g.glyphRank;
 		this.avoidBeingComposite = g.avoidBeingComposite;
 	}
@@ -131,26 +137,14 @@ module.exports = class Glyph {
 
 	tryBecomeMirrorOf(dst, rankSet) {
 		if (rankSet.has(this) || rankSet.has(dst)) return;
-		const csThis = this.geometry.asContours();
-		const csDst = dst.geometry.asContours();
-		if (csThis.length !== csDst.length) return;
-		for (let j = 0; j < csThis.length; j++) {
-			const c1 = csThis[j],
-				c2 = csDst[j];
-			if (c1.length !== c2.length) return;
+		const csThis = this.geometry.unlinkReferences().toShapeStringOrNull();
+		const csDst = dst.geometry.unlinkReferences().toShapeStringOrNull();
+		if (csThis && csDst && csThis === csDst) {
+			this.geometry = new Geom.CombineGeometry([new Geom.ReferenceGeometry(dst, 0, 0)]);
+			rankSet.add(this);
 		}
-		for (let j = 0; j < csThis.length; j++) {
-			const c1 = csThis[j],
-				c2 = csDst[j];
-			for (let k = 0; k < c1.length; k++) {
-				const z1 = c1[k],
-					z2 = c2[k];
-				if (z1.x !== z2.x || z1.y !== z2.y || z1.type !== z2.type) return;
-			}
-		}
-		this.geometry = new Geom.CombineGeometry([new Geom.ReferenceGeometry(dst, 0, 0)]);
-		rankSet.add(this);
 	}
+
 	clearGeometry() {
 		this.geometry = new Geom.CombineGeometry();
 	}
@@ -159,17 +153,26 @@ module.exports = class Glyph {
 	}
 
 	// Anchors
-	combineAnchor(shift, baseThis, markThat, basesThat) {
-		if (!baseThis || !markThat) return;
-		shift.x = baseThis.x - markThat.x;
-		shift.y = baseThis.y - markThat.y;
-		if (basesThat) {
-			for (const bk in basesThat) {
-				this.baseAnchors[bk] = new Anchor(
-					shift.x + basesThat[bk].x,
-					shift.y + basesThat[bk].y
-				);
+	combineMarks(g, shift) {
+		if (!g.markAnchors) return;
+		for (const m in g.markAnchors) {
+			const markThat = g.markAnchors[m];
+			const baseThis = this.baseAnchors[m];
+			if (!baseThis) continue;
+			shift.x = baseThis.x - markThat.x;
+			shift.y = baseThis.y - markThat.y;
+			let fSuppress = true;
+			if (g.baseAnchors) {
+				for (const m2 in g.baseAnchors) {
+					if (m2 === m) fSuppress = false;
+					const baseDerived = g.baseAnchors[m2];
+					this.baseAnchors[m2] = new Anchor(
+						shift.x + baseDerived.x,
+						shift.y + baseDerived.y
+					);
+				}
 			}
+			if (fSuppress) delete this.baseAnchors[m];
 		}
 	}
 	copyAnchors(g) {

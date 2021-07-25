@@ -19,15 +19,21 @@ module.exports = class Transform {
 	}
 
 	apply(pt) {
+		return this.applyXY(pt.x, pt.y);
+	}
+	applyXY(x, y) {
 		return {
-			x: pt.x * this.xx + pt.y * this.yx + this.x,
-			y: pt.x * this.xy + pt.y * this.yy + this.y
+			x: x * this.xx + y * this.yx + this.x,
+			y: x * this.xy + y * this.yy + this.y
 		};
 	}
 	applyOffset(delta) {
+		return this.applyOffsetXY(delta.x, delta.y);
+	}
+	applyOffsetXY(deltaX, deltaY) {
 		return {
-			x: delta.x * this.xx + delta.y * this.yx,
-			y: delta.x * this.xy + delta.y * this.yy
+			x: deltaX * this.xx + deltaY * this.yx,
+			y: deltaX * this.xy + deltaY * this.yy
 		};
 	}
 	unapply(pt) {
@@ -51,7 +57,14 @@ module.exports = class Transform {
 		);
 	}
 
+	toString() {
+		return `[[${this.xx} ${this.xy}] [${this.yx} ${this.yy}]] + [[${this.x}] [${this.y}]]`;
+	}
+
 	static isTranslate(tfm) {
 		return tfm.xx === 1 && tfm.yy === 1 && tfm.xy === 0 && tfm.yx === 0;
+	}
+	static isIdentity(tfm) {
+		return this.isTranslate(tfm) && tfm.x === 0 && tfm.y === 0;
 	}
 };

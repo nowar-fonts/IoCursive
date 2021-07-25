@@ -1,17 +1,23 @@
 const { Ot } = require("ot-builder");
-const Point = require("../../support/point");
+const Point = require("../../support/geometry/point");
+const Gr = require("../../support/gr");
+const { byCode, bySpacing, byGr, byBuildOrder } = require("./glyph-name");
 
 class MappedGlyphStore {
 	constructor() {
 		this.m_nameMapping = new Map();
 		this.m_mapping = new Map();
+		this.m_primaryUnicodeMapping = new Map();
 	}
 	declare(name, source) {
 		const g = new Ot.Glyph();
-		g.name = name;
 		this.m_nameMapping.set(name, g);
 		this.m_mapping.set(source, g);
 	}
+	setPrimaryUnicode(source, u) {
+		this.m_primaryUnicodeMapping.set(u, source);
+	}
+
 	queryBySourceGlyph(source) {
 		return this.m_mapping.get(source);
 	}
@@ -37,6 +43,51 @@ class MappedGlyphStore {
 			this.fillReferences(g, rs);
 		} else {
 			this.fillContours(g, source.geometry.asContours());
+		}
+	}
+	fillOtGlyphNames() {
+		let gid = 0;
+		let conflictSet = new Set();
+		let rev = new Map();
+		for (const [u, g] of this.m_primaryUnicodeMapping) rev.set(g, u);
+
+		const glyphsInBuildOrder = Array.from(this.m_mapping).sort(
+			([a], [b]) => a.subRank - b.subRank
+		);
+
+		for (const [gSrc, gOt] of glyphsInBuildOrder) gOt.name = undefined;
+
+		// Name by Unicode
+		for (const [gSrc, gOt] of glyphsInBuildOrder) {
+			gOt.name = byCode(gSrc, rev.get(gSrc), conflictSet);
+		}
+		// Name by NWID/WWID
+		let nNewNames = 0;
+		do {
+			nNewNames = 0;
+			for (const [gSrcBase, gOtBase] of glyphsInBuildOrder) {
+				nNewNames += bySpacing(gSrcBase, gOtBase, this.m_nameMapping, conflictSet);
+			}
+		} while (nNewNames > 0);
+		// Name by Gr
+		do {
+			nNewNames = 0;
+			for (const [gSrcBase, gOtBase] of glyphsInBuildOrder) {
+				nNewNames += byGr(gSrcBase, gOtBase, this.m_nameMapping, conflictSet);
+			}
+		} while (nNewNames > 0);
+		// Name rest
+		for (const [gSrc, gOt] of glyphsInBuildOrder) {
+			gOt.name = byBuildOrder(gSrc.subRank, gSrc, gOt.name);
+		}
+
+		// validate
+		{
+			let gnSet = new Set();
+			for (const [gSrc, gOt] of this.m_mapping) {
+				if (gnSet.has(gOt.name)) throw new Error("Unreachable! duplicate name " + gOt.name);
+				gnSet.add(gOt.name);
+			}
 		}
 	}
 
@@ -73,35 +124,32 @@ class MappedGlyphStore {
 
 module.exports = convertGlyphs;
 function convertGlyphs(gsOrig) {
-	const sortedEntries = Array.from(gsOrig.indexedNamedEntries())
-		.map(([j, gn, g]) => [j, gn, queryOrderingUnicode(gsOrig, g), g])
-		.sort(byRank);
+	const sortedEntries = Array.from(gsOrig.namedEntries(Gr.Nwid, Gr.Wwid)).sort(byRank);
 
 	const gs = new MappedGlyphStore();
 	const cmap = new Ot.Cmap.Table();
 
-	for (const [origIndex, name, uOrd, gSrc] of sortedEntries) {
+	for (const [name, gSrc] of sortedEntries) {
 		gs.declare(name, gSrc);
 		const us = gsOrig.queryUnicodeOf(gSrc);
 		if (us) {
 			for (const u of us) {
-				if (isFinite(u - 0) && u) {
-					cmap.unicode.set(u, gs.queryBySourceGlyph(gSrc));
-				}
+				if (!(isFinite(u - 0) && u)) continue;
+				cmap.unicode.set(u, gs.queryBySourceGlyph(gSrc));
+				gs.setPrimaryUnicode(gSrc, u);
 			}
 		}
 	}
-	for (const [origIndex, name, uOrd, gSrc] of sortedEntries) gs.fill(name, gSrc);
-
+	for (const [name, gSrc] of sortedEntries) gs.fill(name, gSrc);
+	gs.fillOtGlyphNames();
 	return { glyphs: gs, cmap };
 }
-function queryOrderingUnicode(gs, g) {
-	const us = gs.queryUnicodeOf(g);
-	if (us && us.size) return Array.from(us).sort((a, b) => a - b)[0];
-	else return 0xffffff;
-}
-function byRank([ja, gna, ua, a], [jb, gnb, ub, b]) {
+
+function byRank([gna, a], [gnb, b]) {
 	return (
-		(b.glyphRank || 0) - (a.glyphRank || 0) || (ua || 0) - (ub || 0) || (ja || 0) - (jb || 0)
+		b.glyphRank - a.glyphRank ||
+		a.grRank - b.grRank ||
+		a.codeRank - b.codeRank ||
+		a.subRank - b.subRank
 	);
 }

@@ -1,15 +1,14 @@
 $$include '../../../meta/macros.ptl'
 
 import [mix linreg clamp fallback] from '../../../support/utils'
-import [DesignParameters] from '../../../meta/aesthetics'
-import '../../../support/point' as Point
 
 glyph-module
 
 glyph-block Symbol-Math-Integrals : begin
 	glyph-block-import CommonShapes
 	glyph-block-import Common-Derivatives
-	glyph-block-import Letter-Latin-Lower-F : LongSShape
+	glyph-block-import Letter-Latin-Long-S : LongSShape
+	glyph-block-import Shared-Symbol-Shapes : WithDotVariants
 
 	define MosaicTop    fontMetrics.os2.sTypoAscender
 	define MosaicBottom fontMetrics.os2.sTypoDescender
@@ -20,25 +19,28 @@ glyph-block Symbol-Math-Integrals : begin
 	create-glyph 'integrate' 0x222B : glyph-proc
 		include : LongSShape BgOpTop BgOpBot Hook IntHookY OperatorStroke
 
-	HDual 'doubleIntegrate' 0x222C 'integrate' (0.5 * Width)
+	HDual 'doubleIntegrate' 0x222C 'integrate' (0.4 * Width)
 
 	create-glyph 'integralUpper' 0x2320 : glyph-proc
+		include : ForceUpright
 		include : intersection
 			Rect MosaicTop MosaicBottom (-Width) (2 * Width)
 			LongSShape BgOpTop (BgOpBot - MosaicHeight * 2) Hook IntHookY OperatorStroke
 
 	create-glyph 'integralExtension' 0x23AE : glyph-proc
+		include : ForceUpright
 		include : intersection
 			Rect MosaicTop MosaicBottom (-Width) (2 * Width)
 			LongSShape (BgOpTop + MosaicHeight) (BgOpBot - MosaicHeight) Hook IntHookY OperatorStroke
 
 	create-glyph 'integralLower' 0x2321 : glyph-proc
+		include : ForceUpright
 		include : intersection
 			Rect MosaicTop MosaicBottom (-Width) (2 * Width)
 			LongSShape (BgOpTop + MosaicHeight * 2) BgOpBot Hook IntHookY OperatorStroke
 
 	create-glyph 'tripleIntegrate' 0x222D : glyph-proc
-		define [shape] : LongSShape BgOpTop BgOpBot (Hook * 0.75) IntHookY [AdviceStroke 4.5]
+		define [shape] : LongSShape BgOpTop BgOpBot (Hook * 0.75) IntHookY [AdviceStroke 4]
 		include [shape]
 		include : Translate (-Width * 0.275) 0
 		include [shape]
@@ -46,7 +48,7 @@ glyph-block Symbol-Math-Integrals : begin
 		include [shape]
 		include : Translate (Width * 0.275) 0
 
-	define [IntegrateRingMask kx] : OShapeOutline (SymbolMid + (RightSB - SB) / 2) (SymbolMid - (RightSB - SB) / 2) [mix 0 SB kx] [mix Width RightSB kx]
+	define [IntegrateRingMask kx] : OShapeOutline.NoOvershoot (SymbolMid + (RightSB - SB) / 2) (SymbolMid - (RightSB - SB) / 2) [mix 0 SB kx] [mix Width RightSB kx]
 	define [IntegrateRing kx sw] : OShape (SymbolMid + (RightSB - SB) / 2) (SymbolMid - (RightSB - SB) / 2) [mix 0 SB kx] [mix Width RightSB kx] sw
 
 	define RingIntFine : AdviceStroke 4
@@ -63,30 +65,30 @@ glyph-block Symbol-Math-Integrals : begin
 	define RingIntDotSize : DotRadius * OperatorStroke / Stroke
 	define RingIntSideShift : (RightSB - SB) * 0.375 - OperatorStroke * HVContrast
 
-	create-glyph 'ringDotIntegrate' 0x2A15 : union
+	WithDotVariants 'ringDotIntegrate' 0x2A15 : function [DrawAt kdr ov] : union
 		difference
 			LongSShape BgOpTop BgOpBot Hook IntHookY OperatorStroke
 			IntegrateRingMask 1
 		IntegrateRing 1 RingIntFine
-		DotAt Middle SymbolMid RingIntDotSize
+		DrawAt Middle SymbolMid (RingIntDotSize * kdr - ov)
 
-	create-glyph 'rightHalfRingDotIntegrate' 0x2A13 : union
+	WithDotVariants 'rightHalfRingDotIntegrate' 0x2A13 : function [DrawAt kdr ov] : union
 		difference
 			LongSShape BgOpTop BgOpBot Hook IntHookY OperatorStroke
 			IntegrateRingMask 1
 		intersection
 			IntegrateRing 1 RingIntFine
 			MaskRight (Middle - OperatorStroke / 2 * HVContrast)
-		DotAt Middle SymbolMid RingIntDotSize
+		DrawAt Middle SymbolMid (RingIntDotSize * kdr - ov)
 
-	create-glyph 'shiftedRightHalfRingDotIntegrate' 0x2A14 : union
+	WithDotVariants 'shiftedRightHalfRingDotIntegrate' 0x2A14 : function [DrawAt kdr ov] : union
 		difference
 			LongSShape BgOpTop BgOpBot Hook IntHookY OperatorStroke
 			WithTransform [Translate RingIntSideShift 0] : IntegrateRingMask 1
 		intersection
 			WithTransform [Translate RingIntSideShift 0] : IntegrateRing 1 RingIntFine
 			MaskRight (Middle - OperatorStroke / 2 * HVContrast)
-		DotAt (Middle + RingIntSideShift) SymbolMid RingIntDotSize
+		DrawAt (Middle + RingIntSideShift) SymbolMid (RingIntDotSize * kdr - ov)
 
 	define RingIntArrowSize : Hook / 2
 	define RingIntArrowGap : Math.max [AdviceStroke 6] (RingIntArrowSize / 4)
@@ -150,7 +152,7 @@ glyph-block Symbol-Math-Integrals : begin
 			IntegrateBox 1 0
 			IntegrateBox 1 RingIntFine
 
-	create-glyph 'rightHalfBoxDotIntegral' 0x2A12 : union
+	WithDotVariants 'rightHalfBoxDotIntegral' 0x2A12 : function [DrawAt kdr ov] : union
 		difference
 			LongSShape BgOpTop BgOpBot Hook IntHookY OperatorStroke
 			IntegrateBox 1 0
@@ -159,7 +161,7 @@ glyph-block Symbol-Math-Integrals : begin
 				IntegrateBox 1 0
 				MaskRight (Middle - OperatorStroke / 2 * HVContrast)
 			IntegrateBox 1 RingIntFine
-		DotAt Middle SymbolMid RingIntDotSize
+		DrawAt Middle SymbolMid (RingIntDotSize * kdr - ov)
 
 	create-glyph 'ringDoubleIntegrate' 0x222F : union
 		difference

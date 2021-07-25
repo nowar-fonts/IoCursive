@@ -1,7 +1,6 @@
 $$include '../../../meta/macros.ptl'
 
 import [mix barmixL linreg clamp fallback] from '../../../support/utils'
-import [DesignParameters] from '../../../meta/aesthetics'
 
 glyph-module
 
@@ -21,3 +20,4 @@ glyph-block Letter-Greek-Lower-Mu : begin
 			straight.up.end SB SmallSmoothB [widths.heading 0 [AdviceStroke 4] Upward]
 		if SLAB : begin
 			include : LeftwardTopSerif SB XH SideJut
+	alias 'micro' 0xB5 'grek/mu'
