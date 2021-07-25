@@ -2,7 +2,7 @@ $$include '../../../meta/macros.ptl'
 
 import [mix linreg clamp fallback] from '../../../support/utils'
 import [DesignParameters] from '../../../meta/aesthetics'
-import '../../../support/point' as Point
+import '../../../support/geometry/point' as Point
 
 glyph-module
 
@@ -109,8 +109,12 @@ glyph-block Symbol-Math-APL : begin
 		include : intersection [refer-glyph 'aplsquareShadow'] shape
 		include : ScaleAround Middle SymbolMid aplBoxInnerScale
 
+	define [aplBoxedPhantom shape] : glyph-proc
+		include : intersection [refer-glyph 'aplsquareShadow'] shape
+		include : ScaleAround Middle SymbolMid aplBoxInnerScale
+
 	create-glyph 0x2338 : composite-proc [refer-glyph 'enquad'] [aplBoxed : refer-glyph 'equal']
-	create-glyph 0x2339 : composite-proc [refer-glyph 'enquad'] [aplBoxed : refer-glyph 'divide']
+	derive-glyphs 'boxedDivied' 0x2339 'divide' : function [src sel] : composite-proc [refer-glyph 'enquad'] [aplBoxed : refer-glyph src]
 	create-glyph 0x233A : composite-proc [refer-glyph 'enquad'] [aplBoxed : refer-glyph 'whiteDiamond.NWID']
 	create-glyph 0x233B : composite-proc [refer-glyph 'enquad'] [aplBoxed : refer-glyph 'whiteSmallCircle.NWID']
 	create-glyph 0x233C : composite-proc [refer-glyph 'enquad'] [aplBoxed : refer-glyph 'whiteCircle.NWID']
@@ -152,30 +156,43 @@ glyph-block Symbol-Math-APL : begin
 		FlipAround Middle SymbolMid
 	create-glyph 0x235E : composite-proc [refer-glyph 'enquad'] [aplBoxed : refer-glyph 'asciiSingleQuote.straight']
 	create-glyph 0x235F : composite-proc [refer-glyph 'enquad'] [intersection [refer-glyph 'mathOOutline'] [refer-glyph 'opAsterisk.low']] [refer-glyph 'mathO']
-	create-glyph 0x2360 : composite-proc [refer-glyph 'enquad'] [aplBoxed : composite-proc [refer-glyph 'colon'] [Realign Middle (XH/2) Middle SymbolMid]]
+	derive-glyphs 'boxedColon' 0x2360 'colon' : function [src sel] : composite-proc [refer-glyph 'enquad'] [aplBoxed : composite-proc [refer-glyph src] [Realign Middle (XH/2) Middle SymbolMid]]
 	create-glyph 0x2361 : composite-proc [refer-glyph 'top'] [MarkSet.tack] [refer-glyph 'dieresisAbove'] [clear-anchors]
 	create-glyph 0x2362 : composite-proc [refer-glyph 'nabla'] [refer-glyph 'dieresisAbove']
-	create-glyph 0x2363 : composite-proc [refer-glyph 'asterisk.pentaLow'] [MarkSet.plus] [refer-glyph 'dieresisAbove'] [clear-anchors]
+	create-glyph 0x2363 : composite-proc [refer-glyph 'asterisk.pentaSMid'] [MarkSet.plus] [refer-glyph 'dieresisAbove'] [clear-anchors]
 	create-glyph 0x2364 : composite-proc [refer-glyph 'whiteSmallCircle.NWID'] [MarkSet.plus] [refer-glyph 'dieresisAbove'] [clear-anchors]
 	create-glyph 0x2365 : composite-proc [refer-glyph 'whiteCircle.NWID'] [MarkSet.plus] [refer-glyph 'dieresisAbove'] [clear-anchors]
 	create-glyph 0x2366 : composite-proc [refer-glyph 'enquad'] [Overlay [refer-glyph 'cup'] [refer-glyph 'aplbar']]
 	create-glyph 0x2367 : composite-proc [refer-glyph 'enquad'] [Overlay [refer-glyph 'subst'] [refer-glyph 'aplbar']]
 	create-glyph 0x2368 : composite-proc [refer-glyph 'asciiTilde.low'] [refer-glyph 'dieresisAbove']
 	create-glyph 0x2369 : composite-proc [refer-glyph 'greater.narrow'] [MarkSet.plus] [refer-glyph 'dieresisAbove'] [clear-anchors]
-	create-glyph 0x236A : composite-proc [refer-glyph 'minus'] [refer-glyph 'comma']
+	derive-composites 'barComma' 0x236A 'comma' 'minus'
 	create-glyph 0x236B : composite-proc [refer-glyph 'enquad'] [Overlay [refer-glyph 'overlayTildeOperator'] [refer-glyph 'nabla']]
 	create-glyph 0x236C : composite-proc [refer-glyph 'enquad'] [Overlay [refer-glyph 'overlayTildeOperator'] [refer-glyph 'zero.lnum.unslashed']]
 	create-glyph 0x236D : composite-proc [refer-glyph 'enquad'] [Overlay [refer-glyph 'overlayTildeOperator'] [refer-glyph 'bar']]
-	create-glyph 0x236E : composite-proc [refer-glyph 'enquad'] [Overlay [refer-glyph 'semicolon'] [refer-glyph 'underscore.high']]
+	derive-glyphs 'barSemicolon' 0x236E 'semicolon' : lambda [src sel] : composite-proc
+		refer-glyph 'enquad'
+		Overlay [refer-glyph src] [refer-glyph 'underscore.high']
 	create-glyph 0x236F : composite-proc [refer-glyph 'enquad'] [aplBoxed : refer-glyph 'notequal']
-	create-glyph 0x2370 : composite-proc [refer-glyph 'enquad'] [aplBoxed : refer-glyph 'question']
 	create-glyph 0x2371 : composite-proc [refer-glyph 'enquad'] [Overlay [refer-glyph 'overlayTildeOperator'] [refer-glyph 'vee']]
 	create-glyph 0x2372 : composite-proc [refer-glyph 'enquad'] [Overlay [refer-glyph 'overlayTildeOperator'] [refer-glyph 'wedge']]
-	alias 'apliota'  0x2373 'grek/iota'
-	alias 'aplrho'   0x2374 'grek/rho'
-	alias 'aplomega' 0x2375 'grek/omega'
-	create-glyph 0x2376 : composite-proc [refer-glyph 'grek/alpha'] [refer-glyph 'underlineBelow'] [clear-anchors]
-	create-glyph 0x2377 : composite-proc [refer-glyph 'smallElement'] [MarkSet.plus] [refer-glyph 'underlineBelow'] [clear-anchors]
-	create-glyph 0x2378 : composite-proc [refer-glyph 'grek/iota'] [refer-glyph 'underlineBelow'] [clear-anchors]
-	create-glyph 0x2379 : composite-proc [refer-glyph 'grek/omega'] [refer-glyph 'underlineBelow'] [clear-anchors]
-	alias 'aplalpha' 0x237A 'grek/alpha'
+	alias 'apl/iota'  0x2373 'grek/iota'
+	alias 'apl/rho'   0x2374 'grek/rho'
+	alias 'apl/omega' 0x2375 'grek/omega'
+	alias 'apl/alpha' 0x237A 'grek/alpha'
+	derive-composites 'apl/alphaBar' 0x2376 'grek/alpha' [refer-glyph 'underlineBelow'] [clear-anchors]
+	derive-composites 'apl/smallElement' 0x2377 'smallElement' [MarkSet.plus] [refer-glyph 'underlineBelow'] [clear-anchors]
+	derive-composites 'apl/iotaBar' 0x2378 'grek/iota' [refer-glyph 'underlineBelow'] [clear-anchors]
+	derive-composites 'apl/omegaBar' 0x2379 'grek/omega' [refer-glyph 'underlineBelow'] [clear-anchors]
+
+	derive-glyphs 'apl/quadQuestion/hookPart' null 'question/hookPart' : function [src sel] : glyph-proc
+		include [refer-glyph 'enquad'] AS_BASE ALSO_METRICS
+		include : aplBoxed : refer-glyph src
+		set-base-anchor 'cvDecompose' 0 0
+
+	derive-glyphs 'apl/quadQuestion/dotPart' null 'question/dotPart' : function [src sel] : glyph-proc
+		include [refer-glyph 'enquad'] AS_BASE ALSO_METRICS
+		include : aplBoxedPhantom : WithTransform [Translate Width 0] : refer-glyph src
+		set-mark-anchor 'cvDecompose' 0 0
+
+	create-two-part-glyph 'apl/quadQuestion'  0x2370 'apl/quadQuestion/hookPart' 'apl/quadQuestion/dotPart'

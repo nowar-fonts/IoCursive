@@ -19,6 +19,6 @@ This project comes with several pre-built packages:
 
 Almost same as [Iosevka](https://github.com/be5invis/Iosevka#customized-build).
 
-As a apart of Nowar DIN and Nowar DIN Cursive, IoCursive is expected to produce both “upright roman” and “upright italic” in one build process. Thus it does not override the `upright` slope variant. Instead, an extra slope variant, `cursive`, is introduced, with `isItalic = true` and `slopeAngle = 0`.
+As a part of Nowar DIN and Nowar DIN Cursive, IoCursive is expected to produce both “upright roman” and “upright italic” in one build process. Thus it does not override the `upright` slope variant. Instead, an extra slope variant, `cursive`, is introduced, with `isItalic = true` and `slopeAngle = 0`.
 
 Note that `cursive` shares the same slope subfamily name with `upright`. You can not install both.

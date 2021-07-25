@@ -1,7 +1,7 @@
 $$include '../../meta/macros.ptl'
 
 import [mix clamp fallback] from '../../support/utils'
-import [Dotless CvDecompose] from "../../support/gr"
+import [Dotless CvDecompose DollarShorterBar] from "../../support/gr"
 import [ DesignParameters ] from "../../meta/aesthetics"
 
 glyph-module
@@ -12,7 +12,7 @@ glyph-block Letter-Shared : begin
 
 	glyph-block-export CreateDottedComposition
 	define [CreateDottedComposition sourceGid dstGid unicode]
-		with-related-glyphs dstGid unicode sourceGid
+		derive-glyphs dstGid unicode sourceGid
 			lambda [src sel] : glyph-proc
 				include [refer-glyph src] AS_BASE ALSO_METRICS
 				include : refer-glyph "dotAbove"
@@ -21,7 +21,7 @@ glyph-block Letter-Shared : begin
 
 	glyph-block-export CreateCommaCaronComposition
 	define [CreateCommaCaronComposition sourceGid dstGid unicode]
-		with-related-glyphs dstGid unicode sourceGid
+		derive-glyphs dstGid unicode sourceGid
 			lambda [src sel] : glyph-proc
 				define srcGlyph : query-glyph src
 				define commaOffset : (Width / 2) * [Math.pow (srcGlyph.advanceWidth / Width * 2) (2/3)]
@@ -31,10 +31,22 @@ glyph-block Letter-Shared : begin
 
 	glyph-block-export CreateAccentedComposition
 	define [CreateAccentedComposition dstGid unicode srcGid accentGid]
-		with-related-glyphs dstGid unicode srcGid : lambda [src sel] : glyph-proc
+		derive-glyphs dstGid unicode srcGid : lambda [src sel] : glyph-proc
 			include [refer-glyph src] AS_BASE ALSO_METRICS
 			include [refer-glyph accentGid]
 			if [not sel] : CvDecompose.set currentGlyph { src accentGid }
+
+	glyph-block-export CreateDollarLikeComposition
+	define [CreateDollarLikeComposition gidDst unicode gidPart1U gidPart1R gidPart2] : begin
+		create-glyph gidDst unicode : glyph-proc
+			local kernel : if [DollarShorterBar.get : query-glyph gidPart2] gidPart1R gidPart1U
+			include [refer-glyph kernel] AS_BASE ALSO_METRICS
+			include [refer-glyph gidPart2]
+			CvDecompose.set currentGlyph { gidPart1U gidPart2 }
+
+	glyph-block-export SetGrekUpperTonos
+	define [SetGrekUpperTonos kern] : glyph-proc
+		set-base-anchor 'grekUpperTonos' kern (CAP - 0.75 * Accent)
 
 
 glyph-block Letter-Blackboard : begin
@@ -129,7 +141,7 @@ glyph-block Letter-Shared-Shapes : begin
 			g4   right (wide + rinner - O / 2) [widths.heading 0 fine {.x (-HVContrast) .y ((wide - fine) / (wide + rinner * 2 - O))}]
 			arcvh 8
 			g4.left.mid   mid (wide + rinner * 2 - O) [heading Leftward]
-			quadcontrols ((x1 - mid) / (x2 - mid)) 0 8
+			quadControls ((x1 - mid) / (x2 - mid)) 0 8
 			g4   x2 y2
 
 	glyph-block-export ShoulderMidKnotLhs
@@ -275,6 +287,20 @@ glyph-block Letter-Shared-Shapes : begin
 			g4 (cx - CorrectionOMidX * sw) (cy - O)
 			archv
 
+	glyph-block-export InwardSlabArcEnd_RtlRhs
+	define [InwardSlabArcEnd_RtlRhs sx cx cy sw hook] : begin
+		return : list
+			arcvh
+			g4 (cx + CorrectionOMidX * sw) (cy + O)
+			g4 sx (cy + DToothlessRise) [widths.rhs sw]
+
+	glyph-block-export InwardSlabArcEnd_LtrLhs
+	define [InwardSlabArcEnd_LtrLhs sx cx cy sw hook] : begin
+		return : list
+			arcvh
+			g4 (cx + CorrectionOMidX * sw) (cy + O)
+			g4 sx (cy + DToothlessRise) [widths.lhs sw]
+
 	glyph-block-export ArcStartSerifWidth
 	define [ArcStartSerifWidth stroke] : Math.max (stroke * 0.875) [AdviceStroke 3.5]
 
@@ -319,7 +345,7 @@ glyph-block Letter-Shared-Shapes : begin
 
 	glyph-block-export DiagonalTailStdDepth
 	define [DiagonalTailStdDepth df sw] : Math.max (0.5 * sw)
-		df.div * [Math.hypot HookX Hook] - 0.25 * sw
+		df.div * para.unitWidthScalar * [Math.hypot HookX Hook] - 0.25 * sw
 
 	glyph-block-export DiagonalTailInnerRadius
 	define [DiagonalTailInnerRadius] : Math.max (XH / 32) (0.5 * [AdviceStroke2 24 32 XH])
@@ -349,12 +375,21 @@ glyph-block Letter-Shared-Shapes : begin
 				if (sign > 0)
 					widths.center.heading swMid Rightward
 					widths.center.heading swMid Leftward
-			if (sign <= 0) {} : alsoThru.g2
-				[Math.sin (tailAngle / 2)] / [Math.sin tailAngle]
-				(1 - [Math.cos (tailAngle / 2)]) / (1 - [Math.cos tailAngle])
-				widths.center : mix swMid fine (1 / 2)
+			if (sign <= 0) {} : alsoThruThem
+				list
+					DiagonalTailFArc2K tailAngle (1 / 4)
+					DiagonalTailFArc2K tailAngle (2 / 4)
+					DiagonalTailFArc2K tailAngle (3 / 4)
+			# if (sign <= 0) {} : alsoThru.g2
+			# 	[Math.sin (tailAngle / 2)] / [Math.sin tailAngle]
+			# 	(1 - [Math.cos (tailAngle / 2)]) / (1 - [Math.cos tailAngle])
+			# 	widths.center : mix swMid fine (1 / 2)
 			flat (cx + sign * dxTailStart) (cy + O + dyTailStart) [widths.center fine]
 			curl (cx + sign * dxTailStart + sign * dxDepth) (cy + O + dyTailStart + dyDepth)
+	define [DiagonalTailFArc2K tailAngle t] : list
+		[Math.sin (t * tailAngle)] / [Math.sin tailAngle]
+		(1 - [Math.cos (t * tailAngle)]) / (1 - [Math.cos tailAngle])
+		begin t
 
 	glyph-block-export DiagonalTailR
 	define [DiagonalTailR df cx cy depth sw] : begin
@@ -377,21 +412,28 @@ glyph-block Letter-Shared-Shapes : begin
 	glyph-block-export SerifFrame
 	define [SerifFrame] : params [top bot left right [sw Stroke]] : begin
 		local jutIn : JutIn left right
+		local sideJutIn : jutIn - 0.5 * sw * HVContrast
 		local lBarCenter : left + 0.5 * sw * HVContrast
+		local lBarInner  : left + 1.0 * sw * HVContrast
 		local rBarCenter : right - 0.5 * sw * HVContrast
+		local rBarInner  : right - 1.0 * sw * HVContrast
 		return : object
 			lt : object
 				full : tagged 'serifLT' : CenterTopSerifAsymmetric lBarCenter top Jut jutIn sw
 				outer : tagged 'serifLT' : LeftwardTopSerif left top SideJut sw
+				inner : tagged 'serifLT' : RightwardTopSerif lBarInner top sideJutIn sw
 			rt : object
 				full : tagged 'serifRT' : CenterTopSerifAsymmetric rBarCenter top jutIn Jut sw
 				outer : tagged 'serifRT' : RightwardTopSerif right top SideJut sw
+				inner : tagged 'serifRT' : LeftwardTopSerif rBarInner top sideJutIn sw
 			lb : object
 				full : tagged 'serifLB' : CenterBottomSerifAsymmetric lBarCenter bot Jut jutIn sw
 				outer : tagged 'serifLB' : LeftwardBottomSerif left bot SideJut sw
+				inner : tagged 'serifLB' : RightwardBottomSerif lBarInner bot sideJutIn sw
 			rb : object
 				full : tagged 'serifRB' : CenterBottomSerifAsymmetric rBarCenter bot jutIn Jut sw
 				outer : tagged 'serifRB' : RightwardBottomSerif right bot SideJut sw
+				inner : tagged 'serifRB' : LeftwardBottomSerif rBarInner bot sideJutIn sw
 
 	glyph-block-export WithAIHSerifsMask
 	define [WithAIHSerifsMask top bottom left right s] : if [not SLAB] s : begin
@@ -407,6 +449,61 @@ glyph-block Letter-Shared-Shapes : begin
 		include : dispiro
 			widths.lhs fine
 			flat ztop.x ztop.y [heading Downward]
-			curl xb (zbot.y + LongJut)
+			curl xb [mix (zbot.y + LongJut) ztop.y 0.25]
 			alsoThruThem {{0.5 0.94}}
-			g4.left.end zbot.x (zbot.y + fine) [heading Leftward]
+			straight.left.end zbot.x (zbot.y + fine) [heading Leftward]
+
+	define VJutSw : AdviceStroke 3.5
+
+	glyph-block-export CyrDescender
+	define [CyrDescender] : params [x [connex 0.5] [overflow nothing]] : begin
+		local descenderOverflow : fallback overflow SideJut
+		return : union
+			VBarRight (x + descenderOverflow + 0.125 * Stroke) (HalfStroke - LongJut) Stroke VJutSw
+			HBarTop (x - connex * Stroke * HVContrast) (x + descenderOverflow) Stroke
+
+	glyph-block-export CyrHookDescender
+	define [CyrHookDescender] : params [x [connex 0.5] [overflow nothing]] : begin
+		local descenderOverflow : fallback overflow SideJut
+		local xRef : x + descenderOverflow + 0.25 * Stroke
+		local hd : FlatHookDepth [DivFrame 1]
+		return : union
+			HBarTop (x - connex * Stroke * HVContrast) (x + descenderOverflow) Stroke
+			dispiro
+				widths.rhs VJutSw
+				flat xRef Stroke [heading Downward]
+				curl xRef (hd.y - Hook - 0.25 * VJutSw) [heading Downward]
+				arcvh
+				flat (xRef - hd.x + 0.25 * VJutSw * HVContrast) (0 - Hook)
+				curl (xRef - HookX - 0.5 * VJutSw * HVContrast) (0 - Hook)
+
+	glyph-block-export CyrTailDescender
+	define [CyrTailDescender] : params [x [connex 0.5] [overflow nothing]] : begin
+		local descenderOverflow SideJut
+		local xRef : x + descenderOverflow + (0.3 + TanSlope) * Stroke
+		return : union
+			difference
+				ExtLineLhs 4 VJutSw (xRef - 0.275 * LongJut) (HalfStroke - LongJut) xRef Stroke
+				MaskAbove Stroke
+				MaskBelow (HalfStroke - LongJut)
+			if (!SLAB && descenderOverflow > Stroke * 0.7 || connex)
+				HBarTop (x - connex * Stroke * HVContrast) (x + descenderOverflow) Stroke
+				glyph-proc
+
+	glyph-block-export CyrLeftDescender
+	define [CyrLeftDescender] : params [x [connex 0.5] [overflow nothing]] : begin
+		local descenderOverflow : fallback overflow SideJut
+		return : union
+			VBarLeft (x - descenderOverflow - 0.25 * Stroke) (HalfStroke - LongJut) Stroke VJutSw
+			if (!SLAB && descenderOverflow > Stroke * 0.75 || connex)
+				HBarTop (x + connex * Stroke * HVContrast) (x - descenderOverflow) Stroke
+				glyph-proc
+
+	glyph-block-export HooktopLeftBar
+	define [HooktopLeftBar] : params [bottom] : glyph-proc
+		include : dispiro
+			widths.lhs
+			straight.left.start (SB + HalfStroke * HVContrast + HookX) CAP
+			archv
+			flat SB (CAP - Hook - HalfStroke)
+			curl SB [fallback bottom 0] [heading Downward]

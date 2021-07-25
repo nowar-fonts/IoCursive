@@ -1,11 +1,10 @@
 "use strict";
 
 const TypoGeom = require("typo-geom");
-const Geom = require("../../support/geometry");
-const Point = require("../../support/point");
-const Transform = require("../../support/transform");
-const CurveUtil = require("../../support/curve-util");
-const util = require("util");
+const Geom = require("../../support/geometry/index");
+const Point = require("../../support/geometry/point");
+const Transform = require("../../support/geometry/transform");
+const CurveUtil = require("../../support/geometry/curve-util");
 
 module.exports = finalizeGlyphs;
 function finalizeGlyphs(cache, para, glyphStore) {
@@ -17,22 +16,47 @@ function finalizeGlyphs(cache, para, glyphStore) {
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 function regulateGlyphStore(cache, skew, glyphStore) {
+	const compositeMemo = new Map();
 	for (const g of glyphStore.glyphs()) {
 		if (g.geometry.isEmpty()) continue;
-		if (!regulateCompositeGlyph(glyphStore, g)) flattenSimpleGlyph(cache, skew, g);
+		if (!regulateCompositeGlyph(glyphStore, compositeMemo, g)) {
+			g.geometry = g.geometry.unlinkReferences();
+		}
+	}
+	for (const g of glyphStore.glyphs()) {
+		if (!compositeMemo.get(g)) flattenSimpleGlyph(cache, skew, g);
 	}
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-function regulateCompositeGlyph(glyphStore, g) {
-	const refs = g.geometry.asReferences();
-	if (!refs) return false;
+function memoSet(memo, g, v) {
+	memo.set(g, v);
+	return v;
+}
+function regulateCompositeGlyph(glyphStore, memo, g) {
+	if (memo.has(g)) return memo.get(g);
+
+	let refs = g.geometry.asReferences();
+	if (!refs) return memoSet(memo, g, false);
+
 	for (const sr of refs) {
 		const gn = glyphStore.queryNameOf(sr.glyph);
-		if (!gn || sr.glyph.autoRefPriority < 0) return false;
+		if (!gn) return memoSet(memo, g, false);
 	}
-	return true;
+
+	// De-doppelganger
+	while (refs.length === 1 && regulateCompositeGlyph(glyphStore, memo, refs[0].glyph)) {
+		const sr = refs[0];
+		const targetRefs = sr.glyph.geometry.asReferences();
+		g.clearGeometry();
+		for (const tr of targetRefs) {
+			g.includeGeometry(new Geom.ReferenceGeometry(tr.glyph, tr.x + sr.x, tr.y + sr.y));
+		}
+		refs = g.geometry.asReferences();
+	}
+
+	return memoSet(memo, g, true);
 }
 
 function flattenSimpleGlyph(cache, skew, g) {
@@ -43,8 +67,8 @@ function flattenSimpleGlyph(cache, skew, g) {
 		g.includeContours(CurveUtil.repToShape(cached), 0, 0);
 		cache.refreshGF(ck);
 	} else {
-		const tfBack = new Transform(1, -skew, 0, 1, 0, 0);
-		const tfForward = new Transform(1, +skew, 0, 1, 0, 0);
+		const tfBack = g.gizmo ? g.gizmo.inverse() : new Transform(1, -skew, 0, 1, 0, 0);
+		const tfForward = g.gizmo ? g.gizmo : new Transform(1, +skew, 0, 1, 0, 0);
 		const g1 = new Geom.TransformedGeometry(
 			new SimplifyGeometry(new Geom.TransformedGeometry(g.geometry, tfBack)),
 			tfForward
@@ -92,7 +116,7 @@ class SimplifyGeometry extends Geom.GeometryBase {
 		return this.m_geom.measureComplexity();
 	}
 	toShapeStringOrNull() {
-		const sTarget = this.m_geom.toShapeStringOrNull();
+		const sTarget = this.m_geom.unlinkReferences().toShapeStringOrNull();
 		if (!sTarget) return null;
 		return `SimplifyGeometry{${sTarget}}`;
 	}
@@ -107,10 +131,11 @@ class FairizedShapeSink {
 	endShape() {
 		if (this.lastContour.length > 2) {
 			// TT use CW for outline, being different from Clipper
-			const c = this.lastContour.reverse();
-			const zFirst = c[0],
-				zLast = c[c.length - 1];
-			if (isOccurrent(zFirst, zLast)) c.pop();
+			let c = this.lastContour.reverse();
+			c = this.alignHVKnots(c);
+			c = this.cleanupOccurrentKnots1(c);
+			c = this.cleanupOccurrentKnots2(c);
+			c = this.removeColinearKnots(c);
 			this.contours.push(c);
 		}
 		this.lastContour = [];
@@ -120,51 +145,136 @@ class FairizedShapeSink {
 		this.lineTo(x, y);
 	}
 	lineTo(x, y) {
-		const z = Point.fromXY(Point.Type.Corner, x, y).round(1);
-		this.popOccurrentKnots(z);
-		this.popColinearKnots(z);
-		this.lastContour.push(z);
+		this.lastContour.push(Point.fromXY(Point.Type.Corner, x, y));
 	}
 	arcTo(arc, x, y) {
 		const offPoints = TypoGeom.Quadify.auto(arc, 1, 8);
 		for (const z of offPoints) {
-			this.lastContour.push(Point.from(Point.Type.Quadratic, z).round(1));
+			this.lastContour.push(Point.from(Point.Type.Quadratic, z));
 		}
 		this.lineTo(x, y);
 	}
-	popOccurrentKnots(z) {
-		if (this.lastContour.length <= 0) return;
-		const last = this.lastContour[this.lastContour.length - 1];
-		if (last.type === Point.Type.Corner && last.x === z.x && last.y === z.y) {
-			this.lastContour.pop();
+
+	// Contour cleaning code
+	alignHVKnots(c0) {
+		const c = c0.slice(0);
+		const alignX = new CoordinateAligner(c, GetX, SetX);
+		const alignY = new CoordinateAligner(c, GetY, SetY);
+		for (let i = 0; i < c.length; i++) {
+			if (c[i].type === Point.Type.Corner) {
+				alignX.tryAlign(i, (i + 1) % c.length);
+				alignY.tryAlign(i, (i + 1) % c.length);
+			}
+		}
+		for (let i = 0; i < c.length; i++) {
+			const zCurr = c[i],
+				zNext = c[(i + 1) % c.length];
+			if (zCurr.type === Point.Type.Quadratic && zNext.type === Point.Type.Corner) {
+				alignX.tryAlign(i, (i + 1) % c.length);
+				alignY.tryAlign(i, (i + 1) % c.length);
+			}
+		}
+		alignX.apply();
+		alignY.apply();
+		return c;
+	}
+	cleanupOccurrentKnots1(c0) {
+		const c = [c0[0]];
+		for (let i = 1; i < c0.length; i++) {
+			if (
+				!(
+					c0[i].type === Point.Type.Corner &&
+					c0[i - 1].type === Point.Type.Corner &&
+					isOccurrent(c0[i], c0[i - 1])
+				)
+			) {
+				c.push(c0[i]);
+			}
+		}
+		return c;
+	}
+	cleanupOccurrentKnots2(c0) {
+		const c = c0.slice(0);
+		const zFirst = c[0],
+			zLast = c[c.length - 1];
+		if (isOccurrent(zFirst, zLast)) c.pop();
+		return c;
+	}
+	removeColinearKnots(c0) {
+		const c = c0.slice(0);
+		let lengthBefore = c.length,
+			lengthAfter = c.length;
+		do {
+			lengthBefore = c.length;
+			const shouldRemove = [];
+			for (let i = 0; i < c.length; i++) {
+				const zPrev = c[(i - 1 + c.length) % c.length],
+					zCurr = c[i],
+					zNext = c[(i + 1) % c.length];
+				if (zPrev.type === Point.Type.Corner && zNext.type === Point.Type.Corner) {
+					if (aligned(zPrev.x, zCurr.x, zNext.x) && between(zPrev.y, zCurr.y, zNext.y))
+						shouldRemove[i] = true;
+					if (aligned(zPrev.y, zCurr.y, zNext.y) && between(zPrev.x, zCurr.x, zNext.x))
+						shouldRemove[i] = true;
+				}
+			}
+			let n = 0;
+			for (let i = 0; i < c.length; i++) {
+				if (!shouldRemove[i]) c[n++] = c[i];
+			}
+			c.length = n;
+			lengthAfter = c.length;
+		} while (lengthAfter < lengthBefore);
+
+		return c;
+	}
+}
+
+// Disjoint set for coordinate alignment
+class CoordinateAligner {
+	constructor(c, lens, lensSet) {
+		this.c = c;
+		this.lens = lens;
+		this.lensSet = lensSet;
+		this.rank = [];
+		this.up = [];
+		for (let i = 0; i < c.length; i++) {
+			const x = lens(c[i]);
+			this.up[i] = i;
+			this.rank[i] = Math.abs(x - Math.round(x));
 		}
 	}
-	popColinearKnots(z) {
-		let kArcStart = this.lastContour.length - 2;
-		if (kArcStart >= 0) {
-			const kLast = kArcStart + 1;
-			if (
-				this.lastContour[kArcStart].type !== Point.Type.Corner &&
-				this.lastContour[kLast].type === Point.Type.Corner
-			) {
-				return;
-			}
+	find(i) {
+		if (this.up[i] !== i) {
+			this.up[i] = this.find(this.up[i]);
+			return this.up[i];
+		} else {
+			return i;
 		}
-		while (kArcStart >= 0 && this.lastContour[kArcStart].type !== Point.Type.Corner)
-			kArcStart--;
-		if (kArcStart >= 0) {
-			const a = this.lastContour[kArcStart];
-			let fColinearH = true;
-			let fColinearV = true;
-			for (let m = kArcStart + 1; m < this.lastContour.length; m++) {
-				const b = this.lastContour[m];
-				if (!(aligned(a.y, b.y, z.y) && between(a.x, b.x, z.x))) fColinearH = false;
-				if (!(aligned(a.x, b.x, z.x) && between(a.y, b.y, z.y))) fColinearV = false;
-			}
-			if (fColinearH || fColinearV) this.lastContour.length = kArcStart + 1;
+	}
+	tryAlign(i, j) {
+		if (occurrentPrecisionEqual(this.lens(this.c[i]), this.lens(this.c[j]))) {
+			this.align(i, j);
+		}
+	}
+	align(i, j) {
+		i = this.find(i);
+		j = this.find(j);
+		if (this.rank[i] > this.rank[j]) [i, j] = [j, i];
+		this.up[j] = i;
+	}
+	apply() {
+		for (let i = 0; i < this.c.length; i++) {
+			this.lensSet(this.c[i], this.lens(this.c[this.find(i)]));
 		}
 	}
 }
+
+const GetX = z => z.x;
+const SetX = (z, x) => (z.x = x);
+const GetY = z => z.y;
+const SetY = (z, y) => (z.y = y);
+
 function isOccurrent(zFirst, zLast) {
 	return (
 		zFirst.type === Point.Type.Corner &&
@@ -173,11 +283,11 @@ function isOccurrent(zFirst, zLast) {
 		zFirst.y === zLast.y
 	);
 }
-function geometryPrecisionEqual(a, b) {
-	return Math.round(a) === Math.round(b);
+function occurrentPrecisionEqual(a, b) {
+	return Math.abs(a - b) < CurveUtil.OCCURRENT_PRECISION;
 }
 function aligned(a, b, c) {
-	return geometryPrecisionEqual(a, b) && geometryPrecisionEqual(b, c);
+	return a === b && b === c;
 }
 function between(a, b, c) {
 	return (a <= b && b <= c) || (a >= b && b >= c);

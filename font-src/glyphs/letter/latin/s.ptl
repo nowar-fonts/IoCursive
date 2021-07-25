@@ -1,8 +1,7 @@
 $$include '../../../meta/macros.ptl'
 
 import [mix linreg clamp fallback] from '../../../support/utils'
-import [DesignParameters] from '../../../meta/aesthetics'
-import [DollarShrinkKernel DollarShorterBar CvDecompose] from "../../../support/gr"
+import [DollarShrinkKernel DollarShorterBar CvDecompose MathSansSerif] from "../../../support/gr"
 
 glyph-module
 
@@ -10,7 +9,8 @@ glyph-block Letter-Latin-S : begin
 	glyph-block-import CommonShapes
 	glyph-block-import Common-Derivatives
 	glyph-block-import Letter-Blackboard : BBS BBD
-	glyph-block-import Letter-Shared-Shapes : DToothlessRise
+	glyph-block-import Letter-Shared : CreateDollarLikeComposition
+	glyph-block-import Letter-Shared-Shapes : DToothlessRise FlatHookDepth ArcStartSerifWidth
 	glyph-block-import Letter-Shared-Shapes : SerifedArcStart_RtlLhs SerifedArcEnd_RtlRhs
 	glyph-block-import Letter-Shared-Shapes : SerifedArcStart_LtrRhs SerifedArcEnd_LtrLhs
 	glyph-block-import Letter-Shared-Shapes : ArcStartSerifR ArcEndSerifL
@@ -95,7 +95,6 @@ glyph-block Letter-Latin-S : begin
 
 	define [SmallSStrokeImpl st sb stroke refSwEss] : begin
 		define ess : refSwEss * stroke / Stroke
-		define strokeCoeff : StrokeWidthBlend 0 1 stroke
 		define smooth : adviceSSmooth XH (-1) stroke
 
 		return : dispiro
@@ -123,7 +122,6 @@ glyph-block Letter-Latin-S : begin
 					hookend O (sw -- stroke) (swItalicAdj -- Stroke)
 					g4   (SB - OX + SOBot) SHook
 
-	glyph-block-export SStrokeAlt
 	define [SStrokeAlt] : params [top hook swStart swEnd oXLeftTop offsetLT offsetRB offsetC] : begin
 		define stroke : Math.max swStart swEnd
 		define fine   : Math.min swStart swEnd
@@ -143,24 +141,28 @@ glyph-block Letter-Latin-S : begin
 			hookend (O + soEnd) (sw -- fine) (swItalicAdj -- Stroke) (noAdjTerminalY -- true)
 			g4   (SB + SOBot + HVContrast * soEnd) (hook) [widths.rhs fine]
 
-	define [SmallSStrokePhoneticRight] : begin
-		define stroke : AdviceStroke2 2 3 XH
-		define ess : AdviceStroke2 2.2 3.2 XH
-		define strokeCoeff : StrokeWidthBlend 0 1 stroke
-		define smooth : adviceSSmooth XH (-1) stroke
+	define [SmallSStrokePhoneticRight st top] : begin
+		define stroke : AdviceStroke2 2 3 top
+		define ess : AdviceStroke2 2.2 3.2 top
+		define smooth : adviceSSmooth top (-1) stroke
 		return : dispiro
-			widths.lhs stroke
-			g4   (RightSB + OX) (XH - SHook)
-			hookstart (XH - O) (sw -- stroke) (swItalicAdj -- Stroke)
-			g4   (SB - OX) (XH - smooth)
+			match st
+				[Just SLAB-CLASSICAL] : SerifedArcStart_RtlLhs RightSB Middle top stroke Hook
+				[Just SLAB-INWARD] : list
+					g4 RightSB (top - DToothlessRise) [widths.lhs stroke]
+					g4 (Middle - CorrectionOMidX * stroke) (top - O)
+					archv
+				__ : list
+					g4 RightSB (top - Hook) [widths.lhs stroke]
+					hookstart (top - O) (sw -- stroke) (swItalicAdj -- Stroke)
+			g4   SB (top - smooth)
 			SNeck (stroke -- ess)
-			g4   (RightSB + OX - SOBot) (smooth) [widths 0 stroke]
+			g4   (RightSB - SOBot) (smooth) [widths 0 stroke]
 			arcvh
 			flat (Middle - CorrectionOMidS) 0 [widths 0 Stroke]
 			curl SB 0
 
 	define [RevSmallSStroke st sb stroke ess] : begin
-		define strokeCoeff : StrokeWidthBlend 0 1 stroke
 		define smooth : adviceSSmooth XH 0.75 stroke
 		return : dispiro
 			match st
@@ -185,11 +187,13 @@ glyph-block Letter-Latin-S : begin
 					hookend O (sw -- stroke) (swItalicAdj -- Stroke)
 					g4   (RightSB + OX - SOBot) SHook
 
+	glyph-block-export SAutoSlabStart
 	define [SAutoSlabStart st top sw hook] : match st
 		[Just SLAB-CLASSICAL] : ArcStartSerifR RightSB top sw hook
 		[Just SLAB-INWARD] : ArcStartInwardSerifR RightSB top sw hook
 		__ : glyph-proc
 
+	glyph-block-export SAutoSlabEnd
 	define [SAutoSlabEnd st bot sw hook] : match st
 		[Just SLAB-CLASSICAL] : ArcEndSerifL SB bot  sw hook
 		[Just SLAB-INWARD] : ArcEndInwardSerifL SB bot  sw hook
@@ -204,6 +208,9 @@ glyph-block Letter-Latin-S : begin
 		[Just SLAB-CLASSICAL] : ArcEndSerifR RightSB bot  sw hook
 		[Just SLAB-INWARD] : ArcEndInwardSerifR RightSB bot  sw hook
 		__ : glyph-proc
+
+	define CyrlGeMarks : object
+		e       : MarkSet.OfZone { .top (XH + Accent / 2) .bot 0 }
 
 	define SConfig : object
 		serifless               { SLAB-NONE      SLAB-NONE      }
@@ -229,6 +236,7 @@ glyph-block Letter-Latin-S : begin
 			define top : CAP * 0.95
 			define bot : CAP * 0.05
 			include : MarkSet.capital
+			set-base-anchor 'cvDecompose' 0 0
 			include : SStrokeImpl top bot doTS doBS [AdviceStroke2 3 3 (top - bot)] Ess
 			include : SAutoSlabStart doTS top Stroke Hook
 			include : SAutoSlabEnd   doBS bot Stroke Hook
@@ -238,6 +246,7 @@ glyph-block Letter-Latin-S : begin
 			define top : CAP * 0.88
 			define bot : CAP * 0.12
 			include : MarkSet.capital
+			set-base-anchor 'cvDecompose' 0 0
 			include : SStrokeImpl top bot doTS doBS [AdviceStroke2 3 3 (top - bot)] Ess
 			include : SAutoSlabStart doTS top Stroke Hook
 			include : SAutoSlabEnd   doBS bot Stroke Hook
@@ -247,6 +256,11 @@ glyph-block Letter-Latin-S : begin
 			include : SmallSStrokeImpl doTS doBS [AdviceStroke2 2 3 XH] Ess
 			include : SAutoSlabStart doTS XH [AdviceStroke2 2 3 XH] Hook
 			include : SAutoSlabEnd   doBS 0  [AdviceStroke2 2 3 XH] Hook
+
+		create-glyph "s/phoneticRight.\(suffix)" : glyph-proc
+			include : MarkSet.e
+			include : SmallSStrokePhoneticRight doTS XH
+			include : SAutoSlabStart doTS XH [AdviceStroke2 2 3 XH] Hook
 
 		create-glyph "revS.\(suffix)" : glyph-proc
 			include : MarkSet.capital
@@ -261,7 +275,7 @@ glyph-block Letter-Latin-S : begin
 			include : RevSAutoSlabEnd   doBS 0  [AdviceStroke2 2 3 XH] Hook
 
 		create-glyph "cyrl/ge.italic.\(suffix)" : glyph-proc
-			include : MarkSet.e
+			include : CyrlGeMarks.e
 			include : RevSmallSStroke SLAB-CLASSICAL doBS [AdviceStroke2 2 3 XH] Ess
 			include : ArcStartSerifL SB XH [AdviceStroke2 2 3 XH] Hook Accent
 			include : RevSAutoSlabEnd doBS 0  [AdviceStroke2 2 3 XH] Hook
@@ -269,8 +283,22 @@ glyph-block Letter-Latin-S : begin
 		create-glyph "cyrl/gheDescender.italic.\(suffix)" : glyph-proc
 			include : MarkSet.e
 			include : RevSmallSStroke doTS SLAB-CLASSICAL [AdviceStroke2 2 3 XH] Ess
-			include : ArcEndSerifR RightSB 0 [AdviceStroke2 2 3 XH] Hook Accent
 			include : RevSAutoSlabStart doTS XH [AdviceStroke2 2 3 XH] Hook
+			include : ArcEndSerifR RightSB 0 [AdviceStroke2 2 3 XH] Hook Accent
+
+		create-glyph "cyrl/gheDHook.italic.\(suffix)" : glyph-proc
+			include : MarkSet.e
+			include : RevSmallSStroke doTS SLAB-CLASSICAL [AdviceStroke2 2 3 XH] Ess
+			include : RevSAutoSlabStart doTS XH [AdviceStroke2 2 3 XH] Hook
+			local hd : FlatHookDepth [DivFrame 1]
+			local hookSw : ArcStartSerifWidth : AdviceStroke2 2 3 XH
+			include : dispiro
+				widths.rhs hookSw
+				flat RightSB (Hook - O * 2) [heading Downward]
+				curl RightSB (hd.y - Hook - 0.25 * hookSw) [heading Downward]
+				arcvh
+				flat (RightSB - hd.x + 0.25 * hookSw * HVContrast) (0 - Hook)
+				curl (RightSB - HookX - 0.5 * hookSw * HVContrast) (0 - Hook)
 
 		if [not doBS] : create-glyph "SSwash.\(suffix)" : glyph-proc
 			include : MarkSet.if
@@ -318,7 +346,9 @@ glyph-block Letter-Latin-S : begin
 			include : VBarLeft start.x 0 start.y
 
 	select-variant 'S' 'S'
+	link-reduced-variant 'S/sansSerif' 'S' MathSansSerif
 	select-variant 's' 's'
+	link-reduced-variant 's/sansSerif' 's' MathSansSerif
 	select-variant 'smcpS' 0xA731 (follow -- 'S')
 	select-variant 'revS' 0x1A7 (follow -- 'S')
 	select-variant 'revs' 0x1A8 (follow -- 's')
@@ -338,10 +368,9 @@ glyph-block Letter-Latin-S : begin
 	alias 'cyrl/ghe.italic' null 'revs'
 	select-variant 'cyrl/ge.italic' null
 	select-variant 'cyrl/gheDescender.italic' null (follow -- 'sSwash')
+	select-variant 'cyrl/gheDHook.italic' null (follow -- 'sSwash')
 
-	create-glyph 's.phoneticRight' : glyph-proc
-		include : MarkSet.e
-		include : SmallSStrokePhoneticRight
+	select-variant 's/phoneticRight'
 
 	create-glyph 'mathbb/S' 0x1D54A : glyph-proc
 		include : MarkSet.capital
@@ -391,9 +420,11 @@ glyph-block Letter-Latin-S : begin
 					.y ([if (sign < 0) 0.25 0.375] * sign * BBD * [Math.cos theta])
 				}
 
-	with-related-glyphs 'cyrl/ghayn.italic' null 'revs' : lambda [src sel] : glyph-proc
-		include [refer-glyph src] AS_BASE ALSO_METRICS
-		include : FlatSlashShape Middle (XH / 2) (OverlayStroke / 2) (-0.2) 0.75
+	derive-composites 'cyrl/ghayn.italic' null 'revs'
+		FlatSlashShape Middle (XH / 2) (OverlayStroke / 2) (-0.2) 0.75
+
+	derive-composites 'cyrl/gheStrokeHook.italic' null 'cyrl/gheDHook.italic'
+		FlatSlashShape Middle (XH / 2) (OverlayStroke / 2) (-0.2) 0.75
 
 	define DollarConfig : object
 		open           { 0.95 0.05 (Descender / 2) 0 0 }
@@ -406,22 +437,22 @@ glyph-block Letter-Latin-S : begin
 	foreach { suffix { kTop kBot overflow fillType fShort } } [Object.entries DollarConfig] : do
 		create-glyph "dollar/bar.\(suffix)" : glyph-proc
 			set-width 0
+			set-mark-anchor 'cvDecompose' 0 0
 			define top : CAP * kTop
 			define bot : CAP * kBot
 			define w : AdviceStroke 3
 			define fine : AdviceStroke 4
-			define barMid : Middle - Width
 
-			if (fillType === 1) : include : VBar barMid (bot + HalfStroke) (top - HalfStroke) fine
+			if (fillType === 1) : include : VBar Middle (bot + HalfStroke) (top - HalfStroke) fine
 			if (fillType === 0 || fillType === 1) : begin
 				include : dispiro
 					widths.center w
-					flat barMid (top - HalfStroke)
-					curl barMid (CAP - overflow) [heading Upward]
+					flat Middle (top - HalfStroke)
+					curl Middle (CAP - overflow) [heading Upward]
 				include : dispiro
 					widths.center w
-					flat barMid overflow [heading Upward]
-					curl barMid (bot + HalfStroke)
+					flat Middle overflow [heading Upward]
+					curl Middle (bot + HalfStroke)
 			if (fillType === 2) : begin
 				local gap : (w / Stroke * Ess) + [Math.max ((top - bot) / 6) [AdviceStroke2 3 3 (top - bot)]]
 				local yMid : mix bot top 0.5
@@ -430,21 +461,16 @@ glyph-block Letter-Latin-S : begin
 				include : difference
 					union
 						dispiro
-							flat barMid (CAP - overflow) [widths.center.heading w Downward]
-							curl barMid [mix bot top 0.5] [widths.center.heading fine Downward]
+							flat Middle (CAP - overflow) [widths.center.heading w Downward]
+							curl Middle [mix bot top 0.5] [widths.center.heading fine Downward]
 						dispiro
-							flat barMid overflow [widths.center.heading w Upward]
-							curl barMid [mix bot top 0.5] [widths.center.heading fine Upward]
+							flat Middle overflow [widths.center.heading w Upward]
+							curl Middle [mix bot top 0.5] [widths.center.heading fine Upward]
 
-					dispiro [corner (-Width) yTermLeft : widths.center gap] [corner 0 yTermRight]
+					dispiro [corner 0 yTermLeft : widths.center gap] [corner Width yTermRight]
 
 			if fShort : DollarShorterBar.set currentGlyph 'trigger'
 
 	select-variant 'dollar/bar' (follow -- 'dollar')
 
-	create-glyph 'dollar' '$' : glyph-proc
-		local kernel : if [DollarShorterBar.get : query-glyph 'dollar/bar'] 'DollarKernelCap' 'DollarKernelStd'
-		include : union
-			refer-glyph kernel
-			WithTransform [Translate Width 0] [refer-glyph 'dollar/bar']
-		CvDecompose.set currentGlyph { 'DollarKernelStd' 'dollar/bar' }
+	CreateDollarLikeComposition 'dollar' '$' 'DollarKernelStd' 'DollarKernelCap' 'dollar/bar'

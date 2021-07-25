@@ -30,9 +30,15 @@ function SimpleProp(key) {
 	};
 }
 
-const ZReduced = SimpleProp("ZReduced");
+const LowerYDotAtBelow = SimpleProp("LowerYDotAtBelow");
 const DollarShrinkKernel = SimpleProp("DollarShrinkKernel");
 const DollarShorterBar = SimpleProp("DollarShorterBar");
+const MathSansSerif = SimpleProp("MathSansSerif");
+
+const Nwid = SimpleProp("Nwid");
+const Wwid = SimpleProp("Wwid");
+const Lnum = SimpleProp("Lnum");
+const Onum = SimpleProp("Onum");
 
 const CvDecompose = {
 	get(glyph) {
@@ -71,17 +77,21 @@ const TieMark = {
 	},
 	amendName(name) {
 		return `TieMark{${name}}`;
+	},
+	amendOtName(name) {
+		return name + ".tieMark";
 	}
 };
 
 const TieGlyph = {
 	get(glyph) {
-		if (glyph && glyph.related) return glyph.related.TieMark;
+		if (glyph && glyph.related) return glyph.related.TieGlyph;
 		else return null;
 	},
 	set(glyph) {
 		if (!glyph.related) glyph.related = {};
-		glyph.related.TieMark = true;
+		glyph.related.TieGlyph = true;
+		Joining.or(glyph, Joining.Classes.Mid);
 	}
 };
 
@@ -93,6 +103,48 @@ const Radical = {
 	set(glyph) {
 		if (!glyph.related) glyph.related = {};
 		glyph.related.radical = true;
+	}
+};
+
+const RequireCcmpDecompose = {
+	get(glyph) {
+		if (glyph && glyph.related) return !!glyph.related.RequireCcmpDecompose;
+		else return false;
+	},
+	set(glyph) {
+		if (!glyph.related) glyph.related = {};
+		glyph.related.RequireCcmpDecompose = true;
+	}
+};
+
+const Joining = {
+	get(glyph) {
+		if (glyph && glyph.related) return glyph.related.joining || 0;
+		else return 0;
+	},
+	set(glyph, cls) {
+		if (!glyph.related) glyph.related = {};
+		glyph.related.joining = cls;
+	},
+	or(glyph, cls) {
+		Joining.set(glyph, cls | Joining.get(cls));
+	},
+	amendOtName(baseName, cl) {
+		switch (cl) {
+			case Joining.Classes.Left:
+				return `${baseName}.join-l`;
+			case Joining.Classes.Right:
+				return `${baseName}.join-r`;
+			case Joining.Classes.Mid:
+				return `${baseName}.join-m`;
+			default:
+				return baseName;
+		}
+	},
+	Classes: {
+		Left: 1,
+		Right: 2,
+		Mid: 3
 	}
 };
 
@@ -127,6 +179,9 @@ function Cv(tag, rank) {
 		},
 		amendName(name) {
 			return name + "." + key;
+		},
+		amendOtName(name) {
+			return name + "." + tag + "-" + rank;
 		}
 	};
 	CvTagCache.set(key, rel);
@@ -340,8 +395,21 @@ function queryCvFeatureTagsOf(sink, gid, glyph, variantAssignmentSet) {
 	for (const g of m.values()) if (g.length) sink.push(g);
 }
 
+function linkSuffixPairGr(gs, tagCis, tagTrans, grCis, grTrans) {
+	const reTagCis = new RegExp("\\." + tagCis + "$");
+	for (const [gnCis, gCis] of gs.namedEntries()) {
+		if (reTagCis.test(gnCis) && !/^\./.test(gnCis)) {
+			const gnTrans = gnCis.replace(reTagCis, "." + tagTrans);
+			const gTrans = gs.queryByName(gnTrans);
+			if (!gTrans) continue;
+			grTrans.set(gCis, gnTrans);
+			grCis.set(gTrans, gnCis);
+		}
+	}
+}
+
 exports.Dotless = Dotless;
-exports.ZReduced = ZReduced;
+exports.LowerYDotAtBelow = LowerYDotAtBelow;
 exports.Cv = Cv;
 exports.AnyCv = AnyCv;
 exports.DotlessOrNot = DotlessOrNot;
@@ -350,10 +418,20 @@ exports.getGrMesh = getGrMesh;
 exports.TieMark = TieMark;
 exports.TieGlyph = TieGlyph;
 exports.Radical = Radical;
+exports.RequireCcmpDecompose = RequireCcmpDecompose;
+exports.Joining = Joining;
 exports.AnyDerivingCv = AnyDerivingCv;
 exports.CcmpDecompose = CcmpDecompose;
 exports.CvDecompose = CvDecompose;
-exports.createGrDisplaySheet = createGrDisplaySheet;
 exports.DollarShrinkKernel = DollarShrinkKernel;
 exports.DollarShorterBar = DollarShorterBar;
-exports.SvInheritableRelations = [DollarShrinkKernel, DollarShorterBar];
+exports.MathSansSerif = MathSansSerif;
+exports.Nwid = Nwid;
+exports.Wwid = Wwid;
+exports.Lnum = Lnum;
+exports.Onum = Onum;
+
+exports.createGrDisplaySheet = createGrDisplaySheet;
+exports.linkSuffixPairGr = linkSuffixPairGr;
+
+exports.SvInheritableRelations = [DollarShrinkKernel, DollarShorterBar, Joining];

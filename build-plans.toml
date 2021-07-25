@@ -30,6 +30,37 @@ family = "IoCursive Slab Fixed"
 serifs = "slab"
 spacing = "fixed"
 
+[buildPlans.iosevka-ss18]
+family = "Iosevka SS18"
+desc = "Input Mono Style"
+snapshotFamily = 'iosevka'
+snapshotFeature = '"ss18" on'
+export-glyph-names = true
+no-cv-ss = true
+[buildPlans.iosevka-ss18.variants]
+inherits = "ss18"
+
+[buildPlans.iosevka-term-ss18]
+family = "Iosevka Term SS18"
+spacing = "term"
+snapshotFamily = 'iosevka'
+snapshotFeature = '"NWID" on, "ss18" on'
+export-glyph-names = true
+no-cv-ss = true
+[buildPlans.iosevka-term-ss18.variants]
+inherits = "ss18"
+
+[buildPlans.iosevka-fixed-ss18]
+family = "Iosevka Fixed SS18"
+spacing = "fixed"
+snapshotFamily = 'iosevka'
+snapshotFeature = '"NWID" on, "ss18" on'
+export-glyph-names = true
+no-cv-ss = true
+[buildPlans.iosevka-fixed-ss18.variants]
+inherits = "ss18"
+
+
 ###################################################################################################
 # Proportional families
 
